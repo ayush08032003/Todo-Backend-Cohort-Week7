@@ -6,10 +6,11 @@ const { UserModel, TodoModel } = require("./db");
 const mongoose = require("mongoose");
 const { auth, JWT_SECRET } = require("./auth");
 const app = express();
-const noOfRounds = process.env.NO_OF_ROUNDS;
+const noOfRounds = parseInt(process.env.NO_OF_ROUNDS);
 app.use(express.json());
 const connectionString = process.env.DATABASE_URL;
 const port = process.env.PORT;
+const { z } = require("zod"); // importing zod.
 
 (async () => {
   // console.log(connectionString);
@@ -17,8 +18,30 @@ const port = process.env.PORT;
 })();
 // this line is very important as this will allow us to connect to the database and the last line /todo-app-database is for denoting the database we need to connect to.
 
+const passwordValidate = (password) => {
+  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{3,}$/;
+  return regex.test(password);
+};
+
 app.post("/signup", async (req, res) => {
-  const { email, password, name } = req.body;
+  const requiredBody = z.object({
+    email: z.string().email(),
+    password: z.string().min(3).max(40).refine(passwordValidate, {
+      error:
+        "The Password must contain at least 1 uppercase, 1 lowercase, 1 number and 1 special character.",
+    }),
+    name: z.string().min(3).max(50),
+  });
+
+  const { data, success, error } = requiredBody.safeParse(req.body);
+  if (!success) {
+    res.status(400).json({
+      error: error.issues[0].error,
+    });
+    return;
+  }
+
+  const { email, password, name } = data;
 
   const hashedPassword = await bcrypt.hash(password, noOfRounds);
   // this hashed password will gets add inside the database in the password field.
